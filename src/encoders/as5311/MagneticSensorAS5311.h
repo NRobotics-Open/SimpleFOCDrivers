@@ -30,7 +30,9 @@ public:
 	virtual void init(uint16_t _poles, uint8_t _CS_PIN, SPIClass* _spi);
 
     uint16_t readRawAngleSSI();
+	uint16_t readRawAngleFastSSI();
 	void updateRAW();
+	void updateRAW_ITR(uint16_t rawData);
 
     uint8_t OCF;
     uint8_t COF;
@@ -47,6 +49,7 @@ private:
 	uint8_t CS_PIN;
 	uint16_t poles;
 	float pAngle;
+
 
 	SPIClass* spi;
 	SPISettings settings;

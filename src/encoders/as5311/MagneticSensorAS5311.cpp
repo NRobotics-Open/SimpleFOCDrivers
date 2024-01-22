@@ -2,6 +2,7 @@
 #include "common/foc_utils.h"
 #include "common/time_utils.h"
 
+
 MagneticSensorAS5311::MagneticSensorAS5311(SPISettings settings) : settings(settings) {
 
 }
@@ -19,12 +20,46 @@ void MagneticSensorAS5311::init(uint16_t _poles, uint8_t _CS_PIN, SPIClass* _spi
 
     pinMode(this->CS_PIN,OUTPUT);
     digitalWrite(this->CS_PIN, HIGH);
-
+    spi->beginTransaction(AS5311SSISettings);
     this->Sensor::init();
 }
 
 void MagneticSensorAS5311::updateRAW() {
-    uint16_t rawData = readRawAngleSSI();
+    uint16_t rawData = readRawAngleFastSSI();
+    // uint16_t rawData = readRawAngleSSI();
+
+    // calculate the polpair turns
+    if (lastRAW != rawData)
+    {
+        // if ((rawData < (AS5311_CPP/4)) && ( lastRAW > (AS5311_CPP/4)*3)) {
+        //     ppCounter += 1;
+        // }
+        // else if ((rawData > (AS5311_CPP/4)*3) && ( lastRAW < (AS5311_CPP/4))) {
+        //     ppCounter -= 1;
+        // }
+        if ((rawData < (AS5311_CPP/3)) && ( lastRAW > (AS5311_CPP/3)*2)) {
+            ppCounter += 1;
+        }
+        else if ((rawData > (AS5311_CPP/3)*2) && ( lastRAW < (AS5311_CPP/3))) {
+            ppCounter -= 1;
+        }
+
+        lastRAW = rawData;
+    
+        if ( ppCounter < 0 ) 
+        {
+            ppCounter = (poles-1);
+        }
+        else if (ppCounter >= poles)
+        {
+            ppCounter = 0;
+        }
+    }
+}
+
+void MagneticSensorAS5311::updateRAW_ITR(uint16_t rawData) {
+    // uint16_t rawData = readRawAngleFastSSI();
+    // uint16_t rawData = readRawAngleSSI();
 
     // calculate the polpair turns
     if (lastRAW != rawData)
@@ -49,6 +84,7 @@ void MagneticSensorAS5311::updateRAW() {
 }
 
 
+
 float MagneticSensorAS5311::getSensorAngle() {
     float angle_data = (((float)lastRAW / (float)AS5311_CPP) * pAngle) + ppCounter * pAngle;
     // return the shaft angle
@@ -56,9 +92,28 @@ float MagneticSensorAS5311::getSensorAngle() {
 }
 
 
-uint16_t MagneticSensorAS5311::readRawAngleSSI() {
+uint16_t MagneticSensorAS5311::readRawAngleFastSSI() {
 
     uint8_t spiBuffer[3];
+    // digitalWrite(CS_PIN, LOW);
+    GPIOC->ODR &= ~(1 << 14);
+    // spi->beginTransaction(AS5311SSISettings);
+    spi->transfer(spiBuffer,3);
+    // spi->endTransaction();
+    // digitalWrite(CS_PIN, HIGH);
+    GPIOC->ODR |= (1 << 14);
+
+    // first bit is not valid 
+    uint16_t encValue = ((uint16_t)(spiBuffer[0]&0x7F)<<5) + (uint16_t)(spiBuffer[1]>>3);
+    return(encValue);
+
+}; // 12bit linear polpair value
+
+
+
+uint16_t MagneticSensorAS5311::readRawAngleSSI() {
+ uint8_t spiBuffer[3];
+    
     digitalWrite(CS_PIN, LOW);
     spi->beginTransaction(AS5311SSISettings);
     spi->transfer(spiBuffer,3);
